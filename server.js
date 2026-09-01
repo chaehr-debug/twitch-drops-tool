@@ -3,11 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 const { chromium } = require('playwright');
+const chzzk = require('./chzzk');
 
 const PROFILE_DIR = path.join(__dirname, 'automation-profile');
 const PORT = process.env.PORT || 5175;
 
-let state = { status: 'idle', log: [], results: [] };
+let state = { status: 'idle', log: [], results: [], platform: null };
 let context = null;
 let page = null;
 let loginPollTimer = null;
@@ -15,6 +16,20 @@ let loginPollTimer = null;
 function pushLog(msg) {
   state.log.push(`[${new Date().toISOString()}] ${msg}`);
   if (state.log.length > 800) state.log.shift();
+}
+
+// 연동/실행 도중 멈춰서(예: 브라우저 실행이 응답 없음) 새로 시작할 수 없을 때
+// 사용자가 직접 눌러서 상태를 강제로 idle로 되돌리는 비상 초기화.
+async function resetState() {
+  const previousLog = state.log || [];
+  previousLog.push(`[${new Date().toISOString()}] 사용자가 수동으로 초기화했습니다.`);
+  clearTimeout(loginPollTimer);
+  try {
+    if (context) await context.close();
+  } catch (_) {}
+  context = null;
+  page = null;
+  state = { status: 'idle', log: previousLog, results: [], platform: null };
 }
 
 function formatDateUTC(d) {
@@ -49,7 +64,7 @@ function minutesToDurationLabel(minutes) {
   return rem === 30 ? `${hours}시간 30분` : `${hours}시간`;
 }
 
-async function createCampaign(config, row) {
+async function createTwitchCampaign(config, row) {
   const orgId = config.orgId;
   await page.goto(`https://dev.twitch.tv/org/${orgId}/console/drops-v3/campaign/create`, { waitUntil: 'networkidle' });
 
@@ -93,7 +108,7 @@ async function createCampaign(config, row) {
   return campaignId;
 }
 
-async function addRewardTiers(config, campaignId) {
+async function addTwitchRewardTiers(config, campaignId) {
   await page.goto(`https://dev.twitch.tv/org/${config.orgId}/console/drops-v3/campaign/${campaignId}`, { waitUntil: 'networkidle' });
   await page.getByRole('tab', { name: '드롭스' }).click();
   await page.waitForTimeout(500);
@@ -132,7 +147,7 @@ async function addRewardTiers(config, campaignId) {
   }
 }
 
-async function setFinalStatus(config, campaignId) {
+async function setTwitchFinalStatus(config, campaignId) {
   const statusMap = {
     INACTIVE: 'CAMPAIGN_STATUS_INACTIVE',
     TEST: 'CAMPAIGN_STATUS_TEST',
@@ -151,18 +166,45 @@ async function setFinalStatus(config, campaignId) {
   await page.waitForTimeout(1000);
 }
 
-async function linkAccount() {
+async function linkAccount(platform) {
   if (state.status !== 'idle' && state.status !== 'error' && state.status !== 'done') {
     throw new Error(`이미 연동 중이거나 진행 중입니다 (status=${state.status})`);
   }
-  state = { status: 'launching', log: [], results: [] };
+  state = { status: 'launching', log: [], results: [], platform };
 
-  context = await chromium.launchPersistentContext(PROFILE_DIR, { headless: false, viewport: null });
-  page = context.pages()[0] || await context.newPage();
-  await page.goto('https://dev.twitch.tv/console', { waitUntil: 'networkidle' });
+  if (!context) {
+    context = await chromium.launchPersistentContext(PROFILE_DIR, {
+      headless: false,
+      viewport: null,
+      args: ['--remote-debugging-port=9333'], // 디버깅용 임시 포트, 문제 해결 후 제거 예정
+    });
+    // 사용자가 창을 직접 닫거나 브라우저가 죽으면 즉시 참조를 비워서,
+    // 다음 "연동 시작"이 죽은 context를 붙들고 멈추지 않고 새로 띄우도록 한다.
+    context.on('close', () => {
+      context = null;
+      page = null;
+    });
+  }
+  page = context.pages()[0] || (await context.newPage());
+
+  // 원인을 알 수 없는 네이티브 파일 선택 창이 자동화 도중 뜨는 문제에 대한 안전장치.
+  // 실수로 파일 선택 창이 열리면 자동으로 취소해서 자동화가 멈추지 않게 한다.
+  page.removeAllListeners('filechooser');
+  page.on('filechooser', async (fileChooser) => {
+    try {
+      await fileChooser.setFiles([]);
+      pushLog('예상치 못한 파일 선택 창을 자동으로 닫았습니다.');
+    } catch (_) {}
+  });
+
+  if (platform === 'chzzk') {
+    await page.goto(chzzk.LOGIN_URL, { waitUntil: 'networkidle' });
+  } else {
+    await page.goto('https://dev.twitch.tv/console', { waitUntil: 'networkidle' });
+  }
 
   state.status = 'awaiting_login';
-  pushLog('브라우저 창에서 Twitch 로그인을 진행해주세요. (이미 로그인되어 있다면 자동으로 넘어갑니다)');
+  pushLog('브라우저 창에서 로그인을 진행해주세요. (이미 로그인되어 있다면 자동으로 넘어갑니다)');
   schedulePoll();
 }
 
@@ -174,9 +216,14 @@ function schedulePoll() {
 async function pollLogin() {
   if (state.status !== 'awaiting_login') return;
   try {
-    const loggedIn = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('button')).some((b) => b.textContent.trim() === '로그아웃')
-    );
+    let loggedIn;
+    if (state.platform === 'chzzk') {
+      loggedIn = await chzzk.isFullyConnected(page);
+    } else {
+      loggedIn = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('button')).some((b) => b.textContent.trim() === '로그아웃')
+      );
+    }
     if (loggedIn) {
       state.status = 'connected';
       pushLog('로그인 확인됨. 연동이 완료되었습니다.');
@@ -190,19 +237,50 @@ async function pollLogin() {
 
 async function runSchedule(config, schedule) {
   if (state.status !== 'connected') {
-    throw new Error(`먼저 Twitch 계정 연동을 완료해주세요 (status=${state.status})`);
+    throw new Error(`먼저 계정 연동을 완료해주세요 (status=${state.status})`);
   }
+  const platform = state.platform;
   state.status = 'running';
   pushLog('캠페인 생성을 시작합니다.');
 
   for (let i = 0; i < schedule.length; i++) {
     const row = schedule[i];
+
+    if (platform === 'chzzk') {
+      pushLog(`[${i + 1}/${schedule.length}] 생성 중: ${row.campaignTitle} (${row.startKST} ~ ${row.endKST})`);
+      try {
+        const campaignId = await chzzk.createCampaign(page, config, row);
+        pushLog(`  캠페인 생성됨${campaignId ? ` (번호: ${campaignId})` : ''}`);
+        state.results.push({
+          campaignName: row.campaignTitle,
+          startUTC: row.startKST,
+          endUTC: row.endKST,
+          campaignId: campaignId || '',
+          url: '',
+          status: 'OK',
+          error: '',
+        });
+      } catch (err) {
+        pushLog(`  오류: ${err.message}`);
+        state.results.push({
+          campaignName: row.campaignTitle,
+          startUTC: row.startKST,
+          endUTC: row.endKST,
+          campaignId: '',
+          url: '',
+          status: 'ERROR',
+          error: err.message,
+        });
+      }
+      continue;
+    }
+
     pushLog(`[${i + 1}/${schedule.length}] 생성 중: ${row.campaignName} (${row.startUTC} ~ ${row.endUTC})`);
     try {
-      const campaignId = await createCampaign(config, row);
+      const campaignId = await createTwitchCampaign(config, row);
       pushLog(`  캠페인 생성됨: ${campaignId}`);
-      await addRewardTiers(config, campaignId);
-      await setFinalStatus(config, campaignId);
+      await addTwitchRewardTiers(config, campaignId);
+      await setTwitchFinalStatus(config, campaignId);
       const url = `https://dev.twitch.tv/org/${config.orgId}/console/drops-v3/campaign/${campaignId}`;
       pushLog(`  완료. 상태: ${config.finalStatus}`);
       state.results.push({ campaignName: row.campaignName, startUTC: row.startUTC, endUTC: row.endUTC, campaignId, url, status: 'OK', error: '' });
@@ -216,8 +294,28 @@ async function runSchedule(config, schedule) {
   pushLog('모든 작업이 완료되었습니다.');
 }
 
-function validateConfig(config) {
+function validateConfig(platform, config) {
   if (!config || typeof config !== 'object') throw new Error('config가 필요합니다.');
+
+  if (platform === 'chzzk') {
+    const required = ['description', 'categoryLabel', 'clientId', 'pcLinkUrl', 'mobileLinkUrl'];
+    for (const key of required) {
+      if (!config[key]) throw new Error(`config.${key} 값이 필요합니다.`);
+    }
+    if (!Array.isArray(config.rewardTiers) || config.rewardTiers.length === 0 || config.rewardTiers.length > 6) {
+      throw new Error('config.rewardTiers는 1~6개여야 합니다.');
+    }
+    for (const tier of config.rewardTiers) {
+      if (!tier.name || !tier.usageGuideTemplate || !tier.rewardIdTemplate) {
+        throw new Error('각 rewardTier는 name, usageGuideTemplate, rewardIdTemplate이 필요합니다.');
+      }
+      if (tier.watchHour === undefined || tier.watchMinute === undefined) {
+        throw new Error('각 rewardTier는 watchHour, watchMinute이 필요합니다.');
+      }
+    }
+    return;
+  }
+
   const required = ['orgId', 'game', 'redemptionURL', 'detailsURL', 'description', 'finalStatus'];
   for (const key of required) {
     if (!config[key]) throw new Error(`config.${key} 값이 필요합니다.`);
@@ -235,10 +333,20 @@ function validateConfig(config) {
   }
 }
 
-function validateSchedule(schedule) {
+function validateSchedule(platform, schedule) {
   if (!Array.isArray(schedule) || schedule.length === 0) {
     throw new Error('schedule에는 최소 1개 이상의 행이 필요합니다.');
   }
+
+  if (platform === 'chzzk') {
+    for (const row of schedule) {
+      if (!row.campaignTitle || !row.campaignId || !row.startKST || !row.endKST) {
+        throw new Error('각 행은 campaignTitle, campaignId, startKST, endKST가 필요합니다.');
+      }
+    }
+    return;
+  }
+
   for (const row of schedule) {
     if (!row.campaignName || !row.startUTC || !row.endUTC) {
       throw new Error('각 행은 campaignName, startUTC, endUTC가 필요합니다.');
@@ -268,14 +376,22 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (url.pathname === '/api/connect' && req.method === 'POST') {
-      await linkAccount();
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const platform = body.platform || 'twitch';
+      await linkAccount(platform);
       return json(res, { ok: true });
     }
 
     if (url.pathname === '/api/run' && req.method === 'POST') {
       const body = JSON.parse((await readBody(req)) || '{}');
-      validateConfig(body.config);
-      validateSchedule(body.schedule);
+      const platform = body.platform || state.platform || 'twitch';
+      if (state.platform && state.platform !== platform) {
+        throw new Error(
+          `현재 연동된 플랫폼(${state.platform})과 요청한 플랫폼(${platform})이 다릅니다. 페이지를 새로고침한 뒤 다시 연동해주세요.`
+        );
+      }
+      validateConfig(platform, body.config);
+      validateSchedule(platform, body.schedule);
       runSchedule(body.config, body.schedule).catch((err) => {
         pushLog(`치명적 오류: ${err.message}`);
         state.status = 'error';
@@ -285,6 +401,11 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === '/api/status' && req.method === 'GET') {
       return json(res, state);
+    }
+
+    if (url.pathname === '/api/reset' && req.method === 'POST') {
+      await resetState();
+      return json(res, { ok: true });
     }
 
     if (url.pathname === '/' || url.pathname === '/index.html') {

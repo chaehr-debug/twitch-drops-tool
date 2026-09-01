@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Twitch Drops 자동 생성 툴 (로컬)</title>
+<title>드롭스 자동 생성 툴 (로컬)</title>
 <style>
   :root {
     --bg: #0e0e10;
@@ -26,7 +26,7 @@
   }
   h1 { font-size: 20px; margin: 0 0 4px; }
   h2 { font-size: 15px; margin: 0 0 12px; color: var(--muted); font-weight: 600; }
-  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
   .panel {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -36,7 +36,7 @@
   }
   .panel.disabled { opacity: 0.45; pointer-events: none; }
   label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-  input, select {
+  input, select, textarea {
     background: #0e0e10;
     border: 1px solid var(--border);
     color: var(--text);
@@ -44,13 +44,16 @@
     padding: 6px 8px;
     font-size: 13px;
     width: 100%;
+    font-family: inherit;
   }
+  textarea { resize: vertical; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
   .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .grid4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
   th, td { padding: 6px; text-align: left; font-size: 13px; vertical-align: top; }
   th { color: var(--muted); font-weight: 600; font-size: 12px; }
-  td input { width: 100%; }
+  td input, td textarea { width: 100%; }
   button {
     background: var(--accent);
     color: white;
@@ -93,67 +96,182 @@
   .badge.running { background: #2b4a2b; color: #6fd66f; }
   .badge.error { background: #4a2020; color: var(--err); }
   .badge.connected { background: #2b4a2b; color: #6fd66f; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .tab-btn {
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .tab-btn:hover { background: #1f1f23; color: var(--text); }
+  .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tab-btn.disabled-tab { opacity: 0.35; cursor: not-allowed; }
+  .platform-panels { display: none; }
+  .platform-panels.active { display: block; }
+  .placeholder { color: var(--muted); font-size: 13px; padding: 20px 0; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
 </style>
 </head>
 <body>
 
-<h1>Twitch Drops 자동 생성 툴 (로컬)</h1>
+<h1>드롭스 자동 생성 툴 (로컬)</h1>
 <div class="sub">이 PC에서 실행되는 로컬 버전입니다. 로그인 정보는 이 컴퓨터에만 저장되며, "연동 시작"을 누르면 실제 크롬 창이 열립니다.</div>
 
-<div class="panel">
-  <h2>1. Twitch 계정 연동</h2>
-  <div class="toolbar">
-    <button id="connectBtn" onclick="startConnect()">연동 시작</button>
-    <span id="connectBadge" class="badge"></span>
-  </div>
-  <div style="color:var(--muted); font-size:13px; margin-top:8px;">버튼을 누르면 크롬 창이 새로 열립니다. 그 창에서 Twitch 로그인을 진행해주세요 (이미 로그인되어 있다면 자동으로 넘어갑니다).</div>
+<div class="tabs">
+  <button type="button" class="tab-btn active" data-platform="twitch" onclick="switchPlatform('twitch')">Twitch</button>
+  <button type="button" class="tab-btn" data-platform="chzzk" onclick="switchPlatform('chzzk')">CHZZK</button>
+  <button type="button" class="tab-btn disabled-tab" data-platform="soop" onclick="switchPlatform('soop')">SOOP</button>
+  <button type="button" class="tab-btn disabled-tab" data-platform="cime" onclick="switchPlatform('cime')">CIME</button>
 </div>
 
-<div class="panel disabled" id="settingsPanel">
-  <h2>2. 고정 설정</h2>
-  <div class="grid3">
-    <div><label>Organization ID</label><input id="orgId" value="bac7ec48-b5ec-4bdf-9f91-2491adda1c66" /></div>
-    <div><label>게임 이름 (드롭다운에 표시된 그대로)</label><input id="game" value="Eternal Return" /></div>
-    <div><label>생성 후 상태</label>
-      <select id="finalStatus">
-        <option value="TEST" selected>TEST (검토 후 수동 활성화)</option>
-        <option value="ACTIVE">ACTIVE (즉시 활성화)</option>
-        <option value="INACTIVE">INACTIVE (비활성 상태로 생성)</option>
-      </select>
+<!-- ===================== TWITCH ===================== -->
+<div class="platform-panels active" id="panels-twitch">
+  <div class="panel">
+    <h2>1. Twitch 계정 연동</h2>
+    <div class="toolbar">
+      <button id="connectBtn-twitch" onclick="startConnect('twitch')">연동 시작</button>
+      <span id="connectBadge-twitch" class="badge"></span>
     </div>
+    <div class="hint">버튼을 누르면 크롬 창이 새로 열립니다. 그 창에서 Twitch 로그인을 진행해주세요 (이미 로그인되어 있다면 자동으로 넘어갑니다).</div>
   </div>
-  <div class="grid2">
-    <div><label>드롭 연결 URL (redemptionURL)</label><input id="redemptionURL" value="https://twitch.playeternalreturn.com/" /></div>
-    <div><label>드롭 세부 정보 URL (detailsURL)</label><input id="detailsURL" value="https://twitch.playeternalreturn.com/" /></div>
-  </div>
-  <label>설명</label>
-  <input id="description" value="https://twitch.playeternalreturn.com/" style="margin-bottom:12px" />
 
-  <label>리워드 티어 구성</label>
-  <table id="tiersTable">
-    <thead><tr><th style="width:90px">시청 시간(분)</th><th>드롭 이름</th><th>리워드 ID (쉼표로 여러 개 구분)</th><th></th></tr></thead>
-    <tbody></tbody>
-  </table>
-  <button type="button" class="secondary" onclick="addTierRow()">+ 티어 추가</button>
+  <div class="panel disabled" id="settingsPanel-twitch">
+    <h2>2. 고정 설정</h2>
+    <div class="grid3">
+      <div><label>Organization ID</label><input id="tw-orgId" value="bac7ec48-b5ec-4bdf-9f91-2491adda1c66" /></div>
+      <div><label>게임 이름 (드롭다운에 표시된 그대로)</label><input id="tw-game" value="Eternal Return" /></div>
+      <div><label>생성 후 상태</label>
+        <select id="tw-finalStatus">
+          <option value="TEST" selected>TEST (검토 후 수동 활성화)</option>
+          <option value="ACTIVE">ACTIVE (즉시 활성화)</option>
+          <option value="INACTIVE">INACTIVE (비활성 상태로 생성)</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid2">
+      <div><label>드롭 연결 URL (redemptionURL)</label><input id="tw-redemptionURL" value="https://twitch.playeternalreturn.com/" /></div>
+      <div><label>드롭 세부 정보 URL (detailsURL)</label><input id="tw-detailsURL" value="https://twitch.playeternalreturn.com/" /></div>
+    </div>
+    <label>설명</label>
+    <input id="tw-description" value="https://twitch.playeternalreturn.com/" style="margin-bottom:12px" />
+
+    <label>리워드 티어 구성</label>
+    <table id="tw-tiersTable">
+      <thead><tr><th style="width:90px">시청 시간(분)</th><th>드롭 이름</th><th>리워드 ID (쉼표로 여러 개 구분)</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" class="secondary" onclick="addTwitchTierRow()">+ 티어 추가</button>
+  </div>
+
+  <div class="panel disabled" id="schedulePanel-twitch">
+    <h2>3. 일자별 캠페인 목록</h2>
+    <table id="tw-scheduleTable">
+      <thead><tr><th>캠페인 이름</th><th style="width:220px">시작 (UTC, 예: 2026-08-31T08:00:00Z)</th><th style="width:220px">종료 (UTC)</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" class="secondary" onclick="addTwitchScheduleRow()">+ 행 추가</button>
+  </div>
+
+  <div class="panel disabled" id="runPanel-twitch">
+    <h2>4. 실행</h2>
+    <button id="startBtn-twitch" onclick="startRun('twitch')">시작</button>
+    <span id="statusBadge-twitch" class="badge" style="margin-left:10px"></span>
+  </div>
 </div>
 
-<div class="panel disabled" id="schedulePanel">
-  <h2>3. 일자별 캠페인 목록</h2>
-  <table id="scheduleTable">
-    <thead><tr><th>캠페인 이름</th><th style="width:220px">시작 (UTC, 예: 2026-08-31T08:00:00Z)</th><th style="width:220px">종료 (UTC)</th><th></th></tr></thead>
-    <tbody></tbody>
-  </table>
-  <button type="button" class="secondary" onclick="addScheduleRow()">+ 행 추가</button>
+<!-- ===================== CHZZK ===================== -->
+<div class="platform-panels" id="panels-chzzk">
+  <div class="panel">
+    <h2>1. 치지직(네이버) 계정 연동</h2>
+    <div class="toolbar">
+      <button id="connectBtn-chzzk" onclick="startConnect('chzzk')">연동 시작</button>
+      <span id="connectBadge-chzzk" class="badge"></span>
+    </div>
+    <div class="hint">버튼을 누르면 크롬 창이 새로 열리고 네이버 파트너 로그인 페이지로 이동합니다. 로그인 후 "Naver Games" 선택까지 자동으로 진행됩니다.</div>
+  </div>
+
+  <div class="panel disabled" id="settingsPanel-chzzk">
+    <h2>2. 고정 설정</h2>
+    <div class="grid2">
+      <div><label>카테고리</label><input id="cz-categoryLabel" value="이터널 리턴" /></div>
+      <div><label>Client ID</label><input id="cz-clientId" value="ETERNAL_RETURN_COUPON" /></div>
+    </div>
+    <div class="grid2">
+      <div><label>PC URL</label><input id="cz-pcLinkUrl" value="https://twitch.playeternalreturn.com/" /></div>
+      <div><label>Mobile URL</label><input id="cz-mobileLinkUrl" value="https://twitch.playeternalreturn.com/" /></div>
+    </div>
+    <label>캠페인 설명</label>
+    <input id="cz-description" value="이터널 리턴 드롭스 이벤트" style="margin-bottom:12px" />
+    <div class="grid2">
+      <div><label>캠페인 이미지 경로 (로컬 파일 전체 경로)</label><input id="cz-campaignImagePath" placeholder="C:\...\campaign-images\image.png" /></div>
+      <div><label>쿠폰 파일 상위 폴더 경로</label><input id="cz-couponBaseFolder" placeholder="C:\...\드롭스 폴더\로드 투 마스터즈" /></div>
+    </div>
+    <div class="hint" style="margin-bottom:12px">쿠폰 상위 폴더 안에서 날짜(MMDD)가 포함된 하위 폴더를 자동으로 찾고, 그 안의 "치지직_1.xlsx", "치지직_2.xlsx"... 파일을 리워드 순서대로 사용합니다.</div>
+
+    <div class="grid2">
+      <div>
+        <label>리워드 사용 유효기간 만료 시각 ({DEADLINE} 템플릿용)</label>
+        <input id="cz-rewardValidUntilTime" value="23:59" placeholder="23:59" />
+      </div>
+    </div>
+    <div class="hint" style="margin-bottom:12px">사용 방법 템플릿의 {DEADLINE}에 들어갈 시각입니다. 날짜는 캠페인 종료일 다음 날로 자동 계산되고, 시각만 여기서 설정합니다.</div>
+
+    <label>리워드 티어 구성 (최소 1개, 최대 6개)</label>
+    <table id="cz-tiersTable">
+      <thead><tr>
+        <th style="width:14%">리워드 이름</th>
+        <th style="width:12%">이미지 경로</th>
+        <th style="width:28%">사용 방법 (템플릿, {DEADLINE} 사용 가능)</th>
+        <th style="width:16%">리워드 ID 템플릿 ({MMDD} 사용 가능)</th>
+        <th style="width:14%">시청 시간</th>
+        <th></th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" class="secondary" onclick="addChzzkTierRow()">+ 티어 추가</button>
+  </div>
+
+  <div class="panel disabled" id="schedulePanel-chzzk">
+    <h2>3. 일자별 캠페인 목록 (시간은 한국 표준시 KST 기준)</h2>
+    <table id="cz-scheduleTable">
+      <thead><tr>
+        <th>캠페인 제목</th>
+        <th style="width:14%">캠페인 ID</th>
+        <th style="width:14%">시작 (예: 2026-08-31 05:00)</th>
+        <th style="width:14%">종료 (예: 2026-09-01 05:00)</th>
+        <th style="width:18%">스트리머 UID (쉼표로 구분, 비워두면 전체)</th>
+        <th></th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" class="secondary" onclick="addChzzkScheduleRow()">+ 행 추가</button>
+  </div>
+
+  <div class="panel disabled" id="runPanel-chzzk">
+    <h2>4. 실행</h2>
+    <button id="startBtn-chzzk" onclick="startRun('chzzk')">시작</button>
+    <span id="statusBadge-chzzk" class="badge" style="margin-left:10px"></span>
+  </div>
 </div>
 
-<div class="panel disabled" id="runPanel">
-  <h2>4. 실행</h2>
-  <button id="startBtn" onclick="startRun()">시작</button>
-  <span id="statusBadge" class="badge" style="margin-left:10px"></span>
+<!-- ===================== SOOP / CIME placeholders ===================== -->
+<div class="platform-panels" id="panels-soop">
+  <div class="panel"><div class="placeholder">SOOP 자동화는 아직 준비 중입니다.</div></div>
+</div>
+<div class="platform-panels" id="panels-cime">
+  <div class="panel"><div class="placeholder">CIME 자동화는 아직 준비 중입니다.</div></div>
 </div>
 
 <div class="panel">
-  <h2>진행 로그</h2>
+  <h2>진행 로그
+    <button type="button" class="secondary" style="float:right; padding:4px 10px; font-size:12px;" onclick="resetAll()">초기화</button>
+  </h2>
+  <div class="hint" style="margin-bottom:8px">연동/실행이 멈춰서 안 움직이면 "초기화"를 눌러 처음부터 다시 시작할 수 있습니다 (열려있는 브라우저 창은 닫힙니다).</div>
   <div id="log"></div>
   <table id="resultsTable">
     <thead><tr><th>캠페인 이름</th><th>시작</th><th>종료</th><th>상태</th><th>링크 / 오류</th></tr></thead>
@@ -162,16 +280,26 @@
 </div>
 
 <script>
-const DEFAULT_TIERS = [
+let currentPlatform = 'twitch';
+let pollTimer = null;
+
+function switchPlatform(p) {
+  if (p === 'soop' || p === 'cime') return; // not ready yet
+  currentPlatform = p;
+  document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.platform === p));
+  document.querySelectorAll('.platform-panels').forEach((el) => el.classList.toggle('active', el.id === `panels-${p}`));
+  poll();
+}
+
+/* ---------- Twitch default rows ---------- */
+const TWITCH_DEFAULT_TIERS = [
   { minutes: 60, name: 'DROPS TOKEN', rewardIds: 'bac7ec48-b5ec-4bdf-9f91-2491adda1c66_CUSTOM_ID_DROPS_REWARD_Drops_Coin_01' },
   { minutes: 120, name: 'DROPS TOKEN', rewardIds: 'bac7ec48-b5ec-4bdf-9f91-2491adda1c66_CUSTOM_ID_DROPS_REWARD_Drops_Coin_01' },
   { minutes: 180, name: 'DROPS TOKEN', rewardIds: 'bac7ec48-b5ec-4bdf-9f91-2491adda1c66_CUSTOM_ID_DROPS_REWARD_Drops_Coin_01' },
 ];
 
-let pollTimer = null;
-
-function addTierRow(data) {
-  const tbody = document.querySelector('#tiersTable tbody');
+function addTwitchTierRow(data) {
+  const tbody = document.querySelector('#tw-tiersTable tbody');
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td><input class="tier-minutes" type="number" value="${data ? data.minutes : ''}" /></td>
@@ -182,8 +310,8 @@ function addTierRow(data) {
   tbody.appendChild(tr);
 }
 
-function addScheduleRow(data) {
-  const tbody = document.querySelector('#scheduleTable tbody');
+function addTwitchScheduleRow(data) {
+  const tbody = document.querySelector('#tw-scheduleTable tbody');
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td><input class="sched-name" value="${data ? data.campaignName : ''}" /></td>
@@ -194,36 +322,131 @@ function addScheduleRow(data) {
   tbody.appendChild(tr);
 }
 
-DEFAULT_TIERS.forEach(addTierRow);
-addScheduleRow();
+TWITCH_DEFAULT_TIERS.forEach(addTwitchTierRow);
+addTwitchScheduleRow();
 
-function collectConfig() {
-  const rewardTiers = Array.from(document.querySelectorAll('#tiersTable tbody tr')).map((tr) => ({
+function collectTwitchConfig() {
+  const rewardTiers = Array.from(document.querySelectorAll('#tw-tiersTable tbody tr')).map((tr) => ({
     minutes: Number(tr.querySelector('.tier-minutes').value),
     name: tr.querySelector('.tier-name').value.trim(),
     rewardIds: tr.querySelector('.tier-rewardIds').value.split(',').map((s) => s.trim()).filter(Boolean),
   }));
   return {
-    orgId: document.getElementById('orgId').value.trim(),
-    game: document.getElementById('game').value.trim(),
-    redemptionURL: document.getElementById('redemptionURL').value.trim(),
-    detailsURL: document.getElementById('detailsURL').value.trim(),
-    description: document.getElementById('description').value.trim(),
-    finalStatus: document.getElementById('finalStatus').value,
+    orgId: document.getElementById('tw-orgId').value.trim(),
+    game: document.getElementById('tw-game').value.trim(),
+    redemptionURL: document.getElementById('tw-redemptionURL').value.trim(),
+    detailsURL: document.getElementById('tw-detailsURL').value.trim(),
+    description: document.getElementById('tw-description').value.trim(),
+    finalStatus: document.getElementById('tw-finalStatus').value,
     rewardTiers,
   };
 }
 
-function collectSchedule() {
-  return Array.from(document.querySelectorAll('#scheduleTable tbody tr')).map((tr) => ({
+function collectTwitchSchedule() {
+  return Array.from(document.querySelectorAll('#tw-scheduleTable tbody tr')).map((tr) => ({
     campaignName: tr.querySelector('.sched-name').value.trim(),
     startUTC: tr.querySelector('.sched-start').value.trim(),
     endUTC: tr.querySelector('.sched-end').value.trim(),
   }));
 }
 
-function setConnectBadge(status) {
-  const b = document.getElementById('connectBadge');
+function validateTwitchSchedule(schedule) {
+  if (!schedule.length) return '일자별 캠페인 목록을 1개 이상 입력해주세요.';
+  for (const row of schedule) {
+    if (!row.campaignName || !row.startUTC || !row.endUTC) return '모든 행에 이름/시작/종료를 입력해주세요.';
+    if (isNaN(Date.parse(row.startUTC)) || isNaN(Date.parse(row.endUTC))) return `날짜 형식을 확인해주세요: ${row.campaignName}`;
+  }
+  return null;
+}
+
+/* ---------- CHZZK default rows ---------- */
+function addChzzkTierRow(data) {
+  const tbody = document.querySelector('#cz-tiersTable tbody');
+  const tr = document.createElement('tr');
+  const defaultGuide = `* 쿠폰등록 방법: 이터널리턴 접속 - 우측 상단 옵션 - 서비스 - 쿠폰 - 쿠폰 번호입력
+* 주의 사항
+- 본 쿠폰의 유효기간은 {DEADLINE}까지 등록 가능합니다.
+- 드롭스 토큰 획득후 사용 방법은 [상점 > 추가 상품 > 드롭스]에서 확인하실 수 있습니다.
+- 쿠폰 등록 후 인게임 내 드롭스 토큰의 유효 기간내에 꼭 사용해주시기 바랍니다.`;
+  tr.innerHTML = `
+    <td><input class="cz-tier-name" value="${data ? data.name : 'DROPS TOKEN'}" /></td>
+    <td><input class="cz-tier-image" value="${data ? data.imagePath : ''}" placeholder="C:\\...\\reward-images\\..." /></td>
+    <td><textarea class="cz-tier-guide" rows="6">${data ? data.usageGuideTemplate : defaultGuide}</textarea></td>
+    <td><input class="cz-tier-rewardid" value="${data ? data.rewardIdTemplate : 'DROPS_CHZZK_{MMDD}_' + (document.querySelectorAll('#cz-tiersTable tbody tr').length + 1)}" /></td>
+    <td>
+      <div style="display:flex; gap:4px; align-items:center;">
+        <input class="cz-tier-hour" type="number" min="0" value="${data ? data.watchHour : 1}" style="width:50px" /><span style="font-size:12px">시간</span>
+        <input class="cz-tier-minute" type="number" min="0" step="15" value="${data ? data.watchMinute : 0}" style="width:50px" /><span style="font-size:12px">분</span>
+      </div>
+    </td>
+    <td><button type="button" class="danger" onclick="this.closest('tr').remove()">삭제</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function addChzzkScheduleRow(data) {
+  const tbody = document.querySelector('#cz-scheduleTable tbody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="cz-sched-title" value="${data ? data.campaignTitle : ''}" /></td>
+    <td><input class="cz-sched-id" value="${data ? data.campaignId : ''}" /></td>
+    <td><input class="cz-sched-start" value="${data ? data.startKST : ''}" placeholder="2026-08-31 05:00" /></td>
+    <td><input class="cz-sched-end" value="${data ? data.endKST : ''}" placeholder="2026-09-01 05:00" /></td>
+    <td><input class="cz-sched-streamers" value="${data ? data.streamerUids : ''}" placeholder="UID1, UID2" /></td>
+    <td><button type="button" class="danger" onclick="this.closest('tr').remove()">삭제</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+addChzzkTierRow();
+addChzzkScheduleRow();
+
+function collectChzzkConfig() {
+  const rewardTiers = Array.from(document.querySelectorAll('#cz-tiersTable tbody tr')).map((tr) => ({
+    name: tr.querySelector('.cz-tier-name').value.trim(),
+    imagePath: tr.querySelector('.cz-tier-image').value.trim() || null,
+    usageGuideTemplate: tr.querySelector('.cz-tier-guide').value,
+    rewardIdTemplate: tr.querySelector('.cz-tier-rewardid').value.trim(),
+    watchHour: Number(tr.querySelector('.cz-tier-hour').value),
+    watchMinute: Number(tr.querySelector('.cz-tier-minute').value),
+  }));
+  return {
+    categoryLabel: document.getElementById('cz-categoryLabel').value.trim(),
+    clientId: document.getElementById('cz-clientId').value.trim(),
+    pcLinkUrl: document.getElementById('cz-pcLinkUrl').value.trim(),
+    mobileLinkUrl: document.getElementById('cz-mobileLinkUrl').value.trim(),
+    description: document.getElementById('cz-description').value.trim(),
+    campaignImagePath: document.getElementById('cz-campaignImagePath').value.trim() || null,
+    couponBaseFolder: document.getElementById('cz-couponBaseFolder').value.trim() || null,
+    rewardValidUntilTime: document.getElementById('cz-rewardValidUntilTime').value.trim() || '23:59',
+    rewardTiers,
+  };
+}
+
+function collectChzzkSchedule() {
+  return Array.from(document.querySelectorAll('#cz-scheduleTable tbody tr')).map((tr) => ({
+    campaignTitle: tr.querySelector('.cz-sched-title').value.trim(),
+    campaignId: tr.querySelector('.cz-sched-id').value.trim(),
+    startKST: tr.querySelector('.cz-sched-start').value.trim(),
+    endKST: tr.querySelector('.cz-sched-end').value.trim(),
+    streamerUids: tr.querySelector('.cz-sched-streamers').value.split(',').map((s) => s.trim()).filter(Boolean),
+  }));
+}
+
+function validateChzzkSchedule(schedule) {
+  if (!schedule.length) return '일자별 캠페인 목록을 1개 이상 입력해주세요.';
+  const re = /^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}$/;
+  for (const row of schedule) {
+    if (!row.campaignTitle || !row.campaignId || !row.startKST || !row.endKST) return '모든 행에 제목/ID/시작/종료를 입력해주세요.';
+    if (!re.test(row.startKST) || !re.test(row.endKST)) return `날짜 형식을 확인해주세요 (YYYY-MM-DD HH:mm): ${row.campaignTitle}`;
+  }
+  return null;
+}
+
+/* ---------- shared status/log rendering ---------- */
+function setConnectBadge(platform, status) {
+  const b = document.getElementById(`connectBadge-${platform}`);
+  if (!b) return;
   const labels = {
     idle: '', launching: '연동 준비 중...', awaiting_login: '로그인 대기 중 (크롬 창 확인)',
     connected: '✓ 연동 완료', running: '✓ 연동 완료', done: '✓ 연동 완료', error: '오류',
@@ -232,8 +455,9 @@ function setConnectBadge(status) {
   b.className = 'badge' + (status === 'connected' || status === 'running' || status === 'done' ? ' connected' : status === 'error' ? ' error' : '');
 }
 
-function setStatusBadge(status) {
-  const b = document.getElementById('statusBadge');
+function setStatusBadge(platform, status) {
+  const b = document.getElementById(`statusBadge-${platform}`);
+  if (!b) return;
   const labels = { running: '실행 중', done: '완료', error: '오류' };
   b.textContent = labels[status] || '';
   b.className = 'badge' + (status === 'running' ? ' running' : status === 'error' ? ' error' : '');
@@ -242,13 +466,13 @@ function setStatusBadge(status) {
 function renderResults(results) {
   const table = document.getElementById('resultsTable');
   const body = document.getElementById('resultsBody');
-  if (!results.length) return;
+  if (!results.length) { table.style.display = 'none'; return; }
   table.style.display = '';
   body.innerHTML = '';
   results.forEach((r) => {
     const tr = document.createElement('tr');
     const linkOrError = r.status === 'OK'
-      ? `<a href="${r.url}" target="_blank" style="color:#a970ff">콘솔에서 열기</a>`
+      ? (r.url ? `<a href="${r.url}" target="_blank" style="color:#a970ff">콘솔에서 열기</a>` : '-')
       : `<span class="status-ERROR">${r.error}</span>`;
     tr.innerHTML = `
       <td>${r.campaignName}</td>
@@ -273,24 +497,31 @@ async function poll() {
   try {
     const res = await fetch('/api/status');
     const data = await res.json();
-    setConnectBadge(data.status);
-    setStatusBadge(data.status);
+    const p = data.platform || currentPlatform;
+
+    setConnectBadge(p, data.status);
+    setStatusBadge(p, data.status);
     renderLog(data);
 
     if (data.status === 'connected') {
-      document.getElementById('connectBtn').disabled = true;
-      document.getElementById('settingsPanel').classList.remove('disabled');
-      document.getElementById('schedulePanel').classList.remove('disabled');
-      document.getElementById('runPanel').classList.remove('disabled');
+      const connectBtn = document.getElementById(`connectBtn-${p}`);
+      if (connectBtn) connectBtn.disabled = true;
+      ['settingsPanel', 'schedulePanel', 'runPanel'].forEach((prefix) => {
+        const el = document.getElementById(`${prefix}-${p}`);
+        if (el) el.classList.remove('disabled');
+      });
     }
 
     if (data.status === 'error') {
-      document.getElementById('connectBtn').disabled = false;
-      document.getElementById('startBtn').disabled = false;
+      const connectBtn = document.getElementById(`connectBtn-${p}`);
+      const startBtn = document.getElementById(`startBtn-${p}`);
+      if (connectBtn) connectBtn.disabled = false;
+      if (startBtn) startBtn.disabled = false;
     }
 
     if (data.status === 'done') {
-      document.getElementById('startBtn').disabled = false;
+      const startBtn = document.getElementById(`startBtn-${p}`);
+      if (startBtn) startBtn.disabled = false;
     }
   } catch (e) {
     console.error(e);
@@ -300,52 +531,71 @@ async function poll() {
 pollTimer = setInterval(poll, 1500);
 poll();
 
-async function startConnect() {
-  document.getElementById('connectBtn').disabled = true;
+async function resetAll() {
+  if (!confirm('진행 중인 상태를 초기화할까요? 열려있는 자동화 브라우저 창이 있다면 닫힙니다.')) return;
+  try {
+    await fetch('/api/reset', { method: 'POST' });
+    location.reload();
+  } catch (e) {
+    alert('초기화 실패: ' + e.message);
+  }
+}
+
+async function startConnect(platform) {
+  const connectBtn = document.getElementById(`connectBtn-${platform}`);
+  connectBtn.disabled = true;
   document.getElementById('log').style.display = '';
   document.getElementById('log').textContent = '연동 요청 전송 중... 크롬 창이 열릴 때까지 잠시 기다려주세요.';
 
   try {
-    const res = await fetch('/api/connect', { method: 'POST' });
+    const res = await fetch('/api/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ platform }),
+    });
     const data = await res.json();
     if (data.error) {
       alert('오류: ' + data.error);
-      document.getElementById('connectBtn').disabled = false;
+      connectBtn.disabled = false;
     }
   } catch (e) {
     alert('요청 실패: ' + e.message);
-    document.getElementById('connectBtn').disabled = false;
+    connectBtn.disabled = false;
   }
 }
 
-async function startRun() {
-  const config = collectConfig();
-  const schedule = collectSchedule();
+async function startRun(platform) {
+  let config, schedule, err;
 
-  if (!schedule.length) { alert('일자별 캠페인 목록을 1개 이상 입력해주세요.'); return; }
-  for (const row of schedule) {
-    if (!row.campaignName || !row.startUTC || !row.endUTC) { alert('모든 행에 이름/시작/종료를 입력해주세요.'); return; }
-    if (isNaN(Date.parse(row.startUTC)) || isNaN(Date.parse(row.endUTC))) {
-      alert(`날짜 형식을 확인해주세요: ${row.campaignName}`); return;
-    }
+  if (platform === 'chzzk') {
+    config = collectChzzkConfig();
+    schedule = collectChzzkSchedule();
+    err = validateChzzkSchedule(schedule);
+  } else {
+    config = collectTwitchConfig();
+    schedule = collectTwitchSchedule();
+    err = validateTwitchSchedule(schedule);
   }
 
-  document.getElementById('startBtn').disabled = true;
+  if (err) { alert(err); return; }
+
+  const startBtn = document.getElementById(`startBtn-${platform}`);
+  startBtn.disabled = true;
 
   try {
     const res = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config, schedule }),
+      body: JSON.stringify({ platform, config, schedule }),
     });
     const data = await res.json();
     if (data.error) {
       alert('오류: ' + data.error);
-      document.getElementById('startBtn').disabled = false;
+      startBtn.disabled = false;
     }
   } catch (e) {
     alert('요청 실패: ' + e.message);
-    document.getElementById('startBtn').disabled = false;
+    startBtn.disabled = false;
   }
 }
 </script>

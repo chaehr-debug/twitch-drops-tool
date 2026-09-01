@@ -1,5 +1,6 @@
 node_modules/
 automation-profile/
+automation-profile-chzzk/
 server.log
 results.csv
 error-row-*.png
