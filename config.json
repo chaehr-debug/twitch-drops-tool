@@ -1,0 +1,32 @@
+{
+  "orgId": "bac7ec48-b5ec-4bdf-9f91-2491adda1c66",
+  "game": "Eternal Return",
+  "redemptionURL": "https://twitch.playeternalreturn.com/",
+  "detailsURL": "https://twitch.playeternalreturn.com/",
+  "description": "https://twitch.playeternalreturn.com/",
+  "imagePath": "",
+  "rewardTiers": [
+    {
+      "minutes": 60,
+      "name": "DROPS TOKEN",
+      "rewardIds": [
+        "bac7ec48-b5ec-4bdf-9f91-2491adda1c66_CUSTOM_ID_DROPS_REWARD_Drops_Coin_01"
+      ]
+    },
+    {
+      "minutes": 120,
+      "name": "DROPS TOKEN",
+      "rewardIds": [
+        "bac7ec48-b5ec-4bdf-9f91-2491adda1c66_CUSTOM_ID_DROPS_REWARD_Drops_Coin_01"
+      ]
+    },
+    {
+      "minutes": 180,
+      "name": "DROPS TOKEN",
+      "rewardIds": [
+        "bac7ec48-b5ec-4bdf-9f91-2491adda1c66_CUSTOM_ID_DROPS_REWARD_Drops_Coin_01"
+      ]
+    }
+  ],
+  "finalStatus": "TEST"
+}

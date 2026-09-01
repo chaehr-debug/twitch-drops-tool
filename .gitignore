@@ -1,0 +1,5 @@
+node_modules/
+automation-profile/
+server.log
+results.csv
+error-row-*.png
