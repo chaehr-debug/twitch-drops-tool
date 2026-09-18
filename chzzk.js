@@ -3,6 +3,14 @@ const path = require('path');
 
 const LOGIN_URL = 'https://friend.navercorp.com/login/loginForm.sec';
 
+// 윈도우 탐색기 주소창 등에서 경로를 복사하면 눈에 안 보이는 유니코드 방향 제어
+// 문자(LRM/RLM/LRE 등)가 앞에 붙어오는 경우가 있는데, 이게 있으면 절대경로로
+// 인식되지 않아 엉뚱한 곳(툴 폴더 하위)에서 파일을 찾다 ENOENT가 난다.
+function sanitizePath(p) {
+  if (!p) return p;
+  return String(p).replace(/[​-‏‪-‮⁦-⁩﻿]/g, '').trim();
+}
+
 function parseKST(str) {
   // "YYYY-MM-DD HH:mm"
   const m = String(str).trim().match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})$/);
@@ -35,6 +43,7 @@ function mmdd(parsed) {
 
 function findCouponFolder(baseFolder, mmddStr) {
   if (!baseFolder) return null;
+  baseFolder = sanitizePath(baseFolder);
   if (!fs.existsSync(baseFolder)) throw new Error(`쿠폰 상위 폴더를 찾을 수 없습니다: ${baseFolder}`);
   const entries = fs.readdirSync(baseFolder, { withFileTypes: true });
   const match = entries.find((e) => e.isDirectory() && e.name.includes(mmddStr));
@@ -120,7 +129,7 @@ async function fillRewardItem(frame, page, tier, couponFilePath, validUntilDateT
   await modal.locator('#title').fill(tier.name);
 
   if (tier.imagePath) {
-    await modal.locator('input[type="file"]').first().setInputFiles(tier.imagePath);
+    await modal.locator('input[type="file"]').first().setInputFiles(sanitizePath(tier.imagePath));
     await page.waitForTimeout(800);
   }
 
@@ -139,7 +148,7 @@ async function fillRewardItem(frame, page, tier, couponFilePath, validUntilDateT
   await modal.locator('input[type="file"]').nth(1).setInputFiles(couponFilePath);
   await page.waitForTimeout(800);
   await modal.getByText('업로드', { exact: true }).click();
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(8000);
 
   // watch time
   await selectAntSelectExact(frame, page, modal.locator('#requiredWatchTime_hour'), String(tier.watchHour));
@@ -147,6 +156,25 @@ async function fillRewardItem(frame, page, tier, couponFilePath, validUntilDateT
 
   await modal.getByRole('button', { name: '등록', exact: true }).click();
   await page.waitForTimeout(1200);
+}
+
+// 이전 캠페인 처리 도중 에러가 나면 "신규 캠페인 등록" 폼이 미완성 상태로 화면에
+// 남아있을 수 있다. 그 상태로 다음 캠페인을 시작하면 "신규 캠페인 등록" 버튼 자체가
+// 안 보여서 (이미 그 화면 안에 있으므로) 이후 캠페인이 전부 도미노로 실패한다.
+// 매 캠페인 시작 전에 항상 목록 화면으로 되돌려 놓는다.
+async function resetToDropsList(page) {
+  let frame = getDropsFrame(page);
+  if (!frame) return frame;
+  if (!frame.url().includes('/drops/campaign/register')) return frame;
+
+  const listLink = frame.getByText('드롭스 캠페인 관리', { exact: true });
+  if (await listLink.first().isVisible().catch(() => false)) {
+    await listLink.first().click();
+  } else {
+    await page.reload({ waitUntil: 'networkidle' });
+  }
+  await page.waitForTimeout(1000);
+  return getDropsFrame(page);
 }
 
 // 특정 스트리머만 드롭스에 참여하도록 제한한다. UID가 없으면 기본값인
@@ -189,7 +217,7 @@ async function createCampaign(page, config, row) {
     couponFiles = findCouponFiles(folder, config.rewardTiers.length);
   }
 
-  let frame = getDropsFrame(page);
+  let frame = await resetToDropsList(page);
   if (!frame) throw new Error('드롭스 관리 화면을 찾을 수 없습니다. 계정 연동을 다시 진행해주세요.');
 
   await frame.getByText('신규 캠페인 등록', { exact: true }).click();
@@ -206,7 +234,7 @@ async function createCampaign(page, config, row) {
   await frame.locator('#campaignId').fill(row.campaignId);
 
   if (config.campaignImagePath) {
-    await frame.locator('input[type="file"]').first().setInputFiles(config.campaignImagePath);
+    await frame.locator('input[type="file"]').first().setInputFiles(sanitizePath(config.campaignImagePath));
     await page.waitForTimeout(800);
   }
 
@@ -245,7 +273,10 @@ async function createCampaign(page, config, row) {
     frame = getDropsFrame(page);
   }
 
-  await frame.getByRole('button', { name: '등록', exact: true }).click();
+  // 리워드 모달이 닫힌 뒤에도 숨겨진 채 DOM에 남아있으면 그 안에도 "등록" 버튼이
+  // 있어, 스코프 없이 찾으면 2개가 잡혀 strict mode violation이 난다.
+  // #root 바로 아래(페이지 본문)의 등록 버튼으로 한정한다.
+  await frame.locator('#root').getByRole('button', { name: '등록', exact: true }).click();
   await page.waitForTimeout(1200);
   const confirmBtn = frame.getByRole('button', { name: '확인', exact: true });
   if ((await confirmBtn.count()) > 0) {

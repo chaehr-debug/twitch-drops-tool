@@ -126,7 +126,7 @@
   <button type="button" class="tab-btn active" data-platform="twitch" onclick="switchPlatform('twitch')">Twitch</button>
   <button type="button" class="tab-btn" data-platform="chzzk" onclick="switchPlatform('chzzk')">CHZZK</button>
   <button type="button" class="tab-btn disabled-tab" data-platform="soop" onclick="switchPlatform('soop')">SOOP</button>
-  <button type="button" class="tab-btn disabled-tab" data-platform="cime" onclick="switchPlatform('cime')">CIME</button>
+  <button type="button" class="tab-btn" data-platform="cime" onclick="switchPlatform('cime')">CIME</button>
 </div>
 
 <!-- ===================== TWITCH ===================== -->
@@ -259,12 +259,75 @@
   </div>
 </div>
 
-<!-- ===================== SOOP / CIME placeholders ===================== -->
+<!-- ===================== SOOP placeholder ===================== -->
 <div class="platform-panels" id="panels-soop">
   <div class="panel"><div class="placeholder">SOOP 자동화는 아직 준비 중입니다.</div></div>
 </div>
+
+<!-- ===================== CIME ===================== -->
 <div class="platform-panels" id="panels-cime">
-  <div class="panel"><div class="placeholder">CIME 자동화는 아직 준비 중입니다.</div></div>
+  <div class="panel">
+    <h2>1. 씨미(CIME) 계정 연동</h2>
+    <div class="toolbar">
+      <button id="connectBtn-cime" onclick="startConnect('cime')">연동 시작</button>
+      <span id="connectBadge-cime" class="badge"></span>
+    </div>
+    <div class="hint">버튼을 누르면 크롬 창이 새로 열리고 developers.ci.me/drops 페이지로 이동합니다. 씨미 전용 아이디/비밀번호로 직접 로그인해주세요 (자동 로그인 안 함). 한 번 로그인해두면 이 컴퓨터에서는 다음부터 자동으로 유지됩니다.</div>
+  </div>
+
+  <div class="panel disabled" id="settingsPanel-cime">
+    <h2>2. 고정 설정</h2>
+    <div class="hint" style="margin-bottom:12px">애플리케이션/보상 그룹(쿠폰)/카테고리는 계정에 등록된 값으로 자동 선택되므로 따로 입력하지 않습니다.</div>
+    <label>캠페인 설명</label>
+    <input id="ci-description" value="이터널 리턴 드롭스 이벤트" style="margin-bottom:12px" />
+    <div class="grid2">
+      <div><label>외부 URL</label><input id="ci-externalUrl" value="https://playeternalreturn.com/" /></div>
+      <div><label>캠페인 이미지 경로 (로컬 파일 전체 경로)</label><input id="ci-campaignImagePath" placeholder="C:\...\campaign-images\image.png" /></div>
+    </div>
+    <label>쿠폰 파일 상위 폴더 경로</label>
+    <input id="ci-couponBaseFolder" placeholder="C:\...\드롭스 폴더\새 폴더" style="margin-bottom:4px" />
+    <div class="hint" style="margin-bottom:12px">쿠폰 상위 폴더 안에서 날짜(MMDD)가 포함된 하위 폴더를 자동으로 찾고, 그 안의 "씨미_1.csv", "씨미_2.csv"... 파일을 보상 순서대로 업로드합니다.</div>
+
+    <div class="grid2">
+      <div><label>보상 청구 마감 (종료 기준 +일)</label><input id="ci-claimDeadlineDays" type="number" value="1" /></div>
+      <div><label>보상 청구 마감 시각</label><input id="ci-claimDeadlineTime" value="23:59" placeholder="23:59" /></div>
+    </div>
+    <div class="hint" style="margin-bottom:12px">청구 마감 = 캠페인 종료일 + 위 일수, 위 시각으로 자동 계산됩니다. 각 보상의 만료 시간도 별도로 지정하지 않으면 이 값을 그대로 사용합니다.</div>
+
+    <label>보상 구성 (선착순 쿠폰 고정, 최소 1개)</label>
+    <div class="hint" style="margin-bottom:4px">보상 설명에 <code>{DEADLINE}</code>을 넣으면 위 "보상 청구 마감" 날짜/시각으로 자동 치환됩니다 (예: 9월 20일 05:00).</div>
+    <table id="ci-tiersTable">
+      <thead><tr>
+        <th style="width:16%">보상 제목</th>
+        <th style="width:26%">보상 설명</th>
+        <th style="width:12%">최소 시청(분)</th>
+        <th style="width:24%">보상 이미지 경로</th>
+        <th></th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" class="secondary" onclick="addCimeTierRow()">+ 보상 추가</button>
+  </div>
+
+  <div class="panel disabled" id="schedulePanel-cime">
+    <h2>3. 일자별 캠페인 목록 (시간은 한국 표준시 KST 기준)</h2>
+    <table id="ci-scheduleTable">
+      <thead><tr>
+        <th>캠페인 제목</th>
+        <th style="width:18%">시작 (예: 2026-08-31 05:00)</th>
+        <th style="width:18%">종료 (예: 2026-09-01 05:00)</th>
+        <th></th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" class="secondary" onclick="addCimeScheduleRow()">+ 행 추가</button>
+  </div>
+
+  <div class="panel disabled" id="runPanel-cime">
+    <h2>4. 실행</h2>
+    <button id="startBtn-cime" onclick="startRun('cime')">시작</button>
+    <span id="statusBadge-cime" class="badge" style="margin-left:10px"></span>
+  </div>
 </div>
 
 <div class="panel">
@@ -284,7 +347,7 @@ let currentPlatform = 'twitch';
 let pollTimer = null;
 
 function switchPlatform(p) {
-  if (p === 'soop' || p === 'cime') return; // not ready yet
+  if (p === 'soop') return; // not ready yet
   currentPlatform = p;
   document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.platform === p));
   document.querySelectorAll('.platform-panels').forEach((el) => el.classList.toggle('active', el.id === `panels-${p}`));
@@ -443,6 +506,76 @@ function validateChzzkSchedule(schedule) {
   return null;
 }
 
+/* ---------- CIME default rows ---------- */
+function addCimeTierRow(data) {
+  const tbody = document.querySelector('#ci-tiersTable tbody');
+  const tr = document.createElement('tr');
+  const defaultDescription = `* 쿠폰등록 방법: 이터널리턴 접속 - 우측 상단 옵션 - 서비스 - 쿠폰 - 쿠폰 번호입력
+* 주의 사항
+- 본 쿠폰의 유효기간은 {DEADLINE}까지 등록 가능합니다.
+- 드롭스 토큰 획득후 사용 방법은 [상점 > 추가 상품 > 드롭스]에서 확인하실 수 있습니다.
+- 쿠폰 등록 후 인게임 내 드롭스 토큰의 유효 기간내에 꼭 사용해주시기 바랍니다.`;
+  tr.innerHTML = `
+    <td><input class="ci-tier-name" value="${data ? data.name : 'DROPS TOKEN'}" /></td>
+    <td><textarea class="ci-tier-description" rows="6">${data ? data.description : defaultDescription}</textarea></td>
+    <td><input class="ci-tier-minwatch" type="number" min="1" value="${data ? data.minWatchMinutes : 30}" /></td>
+    <td><input class="ci-tier-image" value="${data ? data.imagePath : ''}" placeholder="C:\\...\\reward-images\\..." /></td>
+    <td><button type="button" class="danger" onclick="this.closest('tr').remove()">삭제</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function addCimeScheduleRow(data) {
+  const tbody = document.querySelector('#ci-scheduleTable tbody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="ci-sched-title" value="${data ? data.campaignTitle : ''}" /></td>
+    <td><input class="ci-sched-start" value="${data ? data.startKST : ''}" placeholder="2026-08-31 05:00" /></td>
+    <td><input class="ci-sched-end" value="${data ? data.endKST : ''}" placeholder="2026-09-01 05:00" /></td>
+    <td><button type="button" class="danger" onclick="this.closest('tr').remove()">삭제</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+addCimeTierRow();
+addCimeScheduleRow();
+
+function collectCimeConfig() {
+  const rewardTiers = Array.from(document.querySelectorAll('#ci-tiersTable tbody tr')).map((tr) => ({
+    name: tr.querySelector('.ci-tier-name').value.trim(),
+    description: tr.querySelector('.ci-tier-description').value.trim(),
+    minWatchMinutes: Number(tr.querySelector('.ci-tier-minwatch').value),
+    imagePath: tr.querySelector('.ci-tier-image').value.trim() || null,
+  }));
+  return {
+    description: document.getElementById('ci-description').value.trim(),
+    externalUrl: document.getElementById('ci-externalUrl').value.trim() || null,
+    campaignImagePath: document.getElementById('ci-campaignImagePath').value.trim() || null,
+    couponBaseFolder: document.getElementById('ci-couponBaseFolder').value.trim() || null,
+    claimDeadlineDays: Number(document.getElementById('ci-claimDeadlineDays').value) || 1,
+    claimDeadlineTime: document.getElementById('ci-claimDeadlineTime').value.trim() || '23:59',
+    rewardTiers,
+  };
+}
+
+function collectCimeSchedule() {
+  return Array.from(document.querySelectorAll('#ci-scheduleTable tbody tr')).map((tr) => ({
+    campaignTitle: tr.querySelector('.ci-sched-title').value.trim(),
+    startKST: tr.querySelector('.ci-sched-start').value.trim(),
+    endKST: tr.querySelector('.ci-sched-end').value.trim(),
+  }));
+}
+
+function validateCimeSchedule(schedule) {
+  if (!schedule.length) return '일자별 캠페인 목록을 1개 이상 입력해주세요.';
+  const re = /^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}$/;
+  for (const row of schedule) {
+    if (!row.campaignTitle || !row.startKST || !row.endKST) return '모든 행에 제목/시작/종료를 입력해주세요.';
+    if (!re.test(row.startKST) || !re.test(row.endKST)) return `날짜 형식을 확인해주세요 (YYYY-MM-DD HH:mm): ${row.campaignTitle}`;
+  }
+  return null;
+}
+
 /* ---------- shared status/log rendering ---------- */
 function setConnectBadge(platform, status) {
   const b = document.getElementById(`connectBadge-${platform}`);
@@ -571,6 +704,10 @@ async function startRun(platform) {
     config = collectChzzkConfig();
     schedule = collectChzzkSchedule();
     err = validateChzzkSchedule(schedule);
+  } else if (platform === 'cime') {
+    config = collectCimeConfig();
+    schedule = collectCimeSchedule();
+    err = validateCimeSchedule(schedule);
   } else {
     config = collectTwitchConfig();
     schedule = collectTwitchSchedule();

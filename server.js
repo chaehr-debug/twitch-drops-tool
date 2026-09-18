@@ -4,6 +4,7 @@ const path = require('path');
 const { exec } = require('child_process');
 const { chromium } = require('playwright');
 const chzzk = require('./chzzk');
+const cime = require('./cime');
 
 const PROFILE_DIR = path.join(__dirname, 'automation-profile');
 const PORT = process.env.PORT || 5175;
@@ -197,8 +198,21 @@ async function linkAccount(platform) {
     } catch (_) {}
   });
 
+  // alert()/confirm() 같은 네이티브 팝업이 뜨면 Playwright는 자동으로 닫지 않고
+  // 페이지 JS 실행 자체를 막아버려서, 로그도 안 올라오고 그대로 멈춘 것처럼 보인다.
+  // 항상 "확인"을 눌러서 자동화가 멈추지 않게 한다.
+  page.removeAllListeners('dialog');
+  page.on('dialog', async (dialog) => {
+    try {
+      pushLog(`예상치 못한 팝업(${dialog.type()}): "${dialog.message()}" 을(를) 자동으로 확인 처리했습니다.`);
+      await dialog.accept();
+    } catch (_) {}
+  });
+
   if (platform === 'chzzk') {
     await page.goto(chzzk.LOGIN_URL, { waitUntil: 'networkidle' });
+  } else if (platform === 'cime') {
+    await page.goto(cime.LOGIN_URL, { waitUntil: 'networkidle' });
   } else {
     await page.goto('https://dev.twitch.tv/console', { waitUntil: 'networkidle' });
   }
@@ -219,6 +233,8 @@ async function pollLogin() {
     let loggedIn;
     if (state.platform === 'chzzk') {
       loggedIn = await chzzk.isFullyConnected(page);
+    } else if (state.platform === 'cime') {
+      loggedIn = await cime.isFullyConnected(page);
     } else {
       loggedIn = await page.evaluate(() =>
         Array.from(document.querySelectorAll('button')).some((b) => b.textContent.trim() === '로그아웃')
@@ -256,6 +272,35 @@ async function runSchedule(config, schedule) {
           startUTC: row.startKST,
           endUTC: row.endKST,
           campaignId: campaignId || '',
+          url: '',
+          status: 'OK',
+          error: '',
+        });
+      } catch (err) {
+        pushLog(`  오류: ${err.message}`);
+        state.results.push({
+          campaignName: row.campaignTitle,
+          startUTC: row.startKST,
+          endUTC: row.endKST,
+          campaignId: '',
+          url: '',
+          status: 'ERROR',
+          error: err.message,
+        });
+      }
+      continue;
+    }
+
+    if (platform === 'cime') {
+      pushLog(`[${i + 1}/${schedule.length}] 생성 중: ${row.campaignTitle} (${row.startKST} ~ ${row.endKST})`);
+      try {
+        await cime.createCampaign(page, config, row);
+        pushLog(`  캠페인 생성됨`);
+        state.results.push({
+          campaignName: row.campaignTitle,
+          startUTC: row.startKST,
+          endUTC: row.endKST,
+          campaignId: '',
           url: '',
           status: 'OK',
           error: '',
@@ -316,6 +361,19 @@ function validateConfig(platform, config) {
     return;
   }
 
+  if (platform === 'cime') {
+    if (!config.description) throw new Error('config.description 값이 필요합니다.');
+    if (!Array.isArray(config.rewardTiers) || config.rewardTiers.length === 0) {
+      throw new Error('config.rewardTiers는 최소 1개 이상이어야 합니다.');
+    }
+    for (const tier of config.rewardTiers) {
+      if (!tier.name || !tier.description || !tier.minWatchMinutes) {
+        throw new Error('각 rewardTier는 name, description, minWatchMinutes가 필요합니다.');
+      }
+    }
+    return;
+  }
+
   const required = ['orgId', 'game', 'redemptionURL', 'detailsURL', 'description', 'finalStatus'];
   for (const key of required) {
     if (!config[key]) throw new Error(`config.${key} 값이 필요합니다.`);
@@ -342,6 +400,15 @@ function validateSchedule(platform, schedule) {
     for (const row of schedule) {
       if (!row.campaignTitle || !row.campaignId || !row.startKST || !row.endKST) {
         throw new Error('각 행은 campaignTitle, campaignId, startKST, endKST가 필요합니다.');
+      }
+    }
+    return;
+  }
+
+  if (platform === 'cime') {
+    for (const row of schedule) {
+      if (!row.campaignTitle || !row.startKST || !row.endKST) {
+        throw new Error('각 행은 campaignTitle, startKST, endKST가 필요합니다.');
       }
     }
     return;
