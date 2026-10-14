@@ -438,8 +438,26 @@ function readBody(req) {
 
 const INDEX_HTML_PATH = path.join(__dirname, 'public', 'index.html');
 
+// 설정 화면을 Cloudflare Pages에 올려두고 그 페이지에서 이 로컬 서버를 호출할 수
+// 있게 허용하는 origin. 와일드카드(*)로 열어두면 사용자가 열어둔 다른 아무 웹사이트나
+// 이 자동화 서버를 몰래 호출할 수 있게 되므로, 우리가 배포한 이 주소 하나만 허용한다.
+const ALLOWED_ORIGIN = 'https://drops-tool.coach-draft-game.workers.dev';
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (req.headers.origin === ALLOWED_ORIGIN) {
+    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    // Chrome의 Private Network Access 정책: 공개 HTTPS 페이지가 localhost 같은
+    // 사설 주소를 호출하려면 서버가 이 헤더로 명시적으로 허용해야 한다.
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  }
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    return res.end();
+  }
 
   try {
     if (url.pathname === '/api/connect' && req.method === 'POST') {

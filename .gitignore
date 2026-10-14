@@ -4,3 +4,4 @@ automation-profile-chzzk/
 server.log
 results.csv
 error-row-*.png
+.wrangler/

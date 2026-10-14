@@ -80,9 +80,38 @@ async function isFullyConnected(page) {
   return !!getDropsFrame(page);
 }
 
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function parseDateTitleParts(dateTitle) {
+  const m = String(dateTitle).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) throw new Error(`잘못된 날짜 title 형식: ${dateTitle}`);
+  return { year: Number(m[1]), month: Number(m[2]), day: Number(m[3]) };
+}
+
+// Ant Design 달력은 기본적으로 오늘 날짜가 속한 달을 보여주기 때문에, 목표
+// 날짜가 다음 달(또는 그 이후)이면 달력에 아예 안 보여서 셀 클릭이 계속
+// 타임아웃난다. 달력 머리글의 연/월 버튼 텍스트를 읽어 목표 연/월이 나올
+// 때까지 이전/다음 달 버튼을 눌러 이동한다.
+async function navigateToMonth(frame, page, targetYear, targetMonth) {
+  for (let i = 0; i < 24; i++) {
+    const dropdown = frame.locator('.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)').last();
+    const yearText = (await dropdown.locator('.ant-picker-year-btn').first().innerText()).trim();
+    const monthText = (await dropdown.locator('.ant-picker-month-btn').first().innerText()).trim();
+    const currentYear = parseInt(yearText, 10);
+    const currentMonth = MONTH_ABBR.indexOf(monthText.slice(0, 3)) + 1;
+    if (currentYear === targetYear && currentMonth === targetMonth) return;
+    const diff = (targetYear - currentYear) * 12 + (targetMonth - currentMonth);
+    await dropdown.locator(diff > 0 ? '.ant-picker-header-next-btn' : '.ant-picker-header-prev-btn').click();
+    await page.waitForTimeout(200);
+  }
+  throw new Error(`날짜 선택기에서 ${targetYear}년 ${targetMonth}월로 이동하지 못했습니다.`);
+}
+
 async function setAntDateTime(frame, page, inputLocator, dateTitle, hour, minute) {
   await inputLocator.click();
   await page.waitForTimeout(500);
+  const { year, month } = parseDateTitleParts(dateTitle);
+  await navigateToMonth(frame, page, year, month);
   const cell = frame.locator(`.ant-picker-dropdown:not(.ant-picker-dropdown-hidden) td[title="${dateTitle}"]`).last();
   await cell.click();
   await page.waitForTimeout(500);
@@ -101,7 +130,9 @@ async function setAntDateTime(frame, page, inputLocator, dateTitle, hour, minute
   }
 }
 
-async function setSingleDate(frame, dateTitle) {
+async function setSingleDate(frame, page, dateTitle) {
+  const { year, month } = parseDateTitleParts(dateTitle);
+  await navigateToMonth(frame, page, year, month);
   const cell = frame.locator(`.ant-picker-dropdown:not(.ant-picker-dropdown-hidden) td[title="${dateTitle}"] .ant-picker-cell-inner`);
   await cell.click();
 }
@@ -139,7 +170,7 @@ async function fillRewardItem(frame, page, tier, couponFilePath, validUntilDateT
   // validity deadline (single date, must be later than campaign end date)
   await modal.locator('#codeEndDate').click();
   await page.waitForTimeout(500);
-  await setSingleDate(frame, validUntilDateTitle);
+  await setSingleDate(frame, page, validUntilDateTitle);
   await page.waitForTimeout(600);
 
   // coupon file upload — 엑셀 파싱에 시간이 걸리므로 넉넉히 기다린 뒤 업로드 버튼을 누르고,
